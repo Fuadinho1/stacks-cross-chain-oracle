@@ -151,3 +151,95 @@
         (ok true)
     )
 )
+
+
+;; Propose Network Upgrades
+(define-public (create-proposal 
+  (proposal-type (string-ascii 50))
+  (proposed-value uint)
+)
+  (let (
+    (proposal-id (var-get next-proposal-id))
+  )
+  (begin
+    ;; Only contract owner can create proposals
+    (asserts! (is-eq tx-sender CONTRACT-OWNER) ERR-UNAUTHORIZED)
+
+    ;; Create new proposal
+    (map-set network-proposals proposal-id {
+      proposal-type: proposal-type,
+      proposed-value: proposed-value,
+      total-votes: u0,
+      votes-for: u0,
+      votes-against: u0,
+      status: false
+    })
+
+    ;; Increment proposal ID
+    (var-set next-proposal-id (+ proposal-id u1))
+
+    (ok proposal-id)
+  ))
+)
+
+;; Slash Provider Stake for Misbehavior
+(define-public (slash-provider-stake 
+  (provider principal)
+  (slash-amount uint)
+)
+  (let (
+    (provider-info (unwrap! 
+      (map-get? oracle-providers provider) 
+      ERR-UNAUTHORIZED
+    ))
+    (current-stake (get stake provider-info))
+  )
+  (begin
+    ;; Only contract owner can slash
+    (asserts! (is-eq tx-sender CONTRACT-OWNER) ERR-UNAUTHORIZED)
+
+    ;; Ensure slash amount doesn't exceed stake
+    (asserts! (<= slash-amount current-stake) ERR-INSUFFICIENT-FUNDS)
+
+    ;; Update provider stake
+    (map-set oracle-providers provider (merge provider-info {
+      stake: (- current-stake slash-amount),
+      reputation: (/ (get reputation provider-info) u2)  ;; Halve reputation
+    }))
+
+    ;; Add slashed funds to rewards pool
+    (var-set rewards-pool (+ (var-get rewards-pool) slash-amount))
+
+    (ok true)
+  ))
+)
+
+;; Initialize proposal ID tracker
+(define-data-var next-proposal-id uint u0)
+
+;; Claim Rewards from Slashed Stakes
+(define-public (claim-rewards)
+  (let (
+    (current-pool (var-get rewards-pool))
+    (provider-info (unwrap! 
+      (map-get? oracle-providers tx-sender) 
+      ERR-UNAUTHORIZED
+    ))
+  )
+  (begin
+    ;; Ensure provider has good reputation
+    (asserts! (>= (get reputation provider-info) u50) ERR-UNAUTHORIZED)
+
+    ;; Transfer rewards
+    (try! (as-contract (stx-transfer? current-pool tx-sender tx-sender)))
+
+    ;; Reset rewards pool
+    (var-set rewards-pool u0)
+
+    (ok true)
+  ))
+)
+
+
+
+
