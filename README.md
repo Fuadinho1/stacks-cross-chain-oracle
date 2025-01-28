@@ -159,6 +159,8 @@ Holds slashed funds for distribution to providers as rewards.
 
 ---
 
+### You are also free to contribute
+
 ## Usage in the Stacks Ecosystem
 This contract integrates seamlessly into the Stacks ecosystem by leveraging the following:
 - **Stacks Tokens (STX)**: Used for staking and rewards.
